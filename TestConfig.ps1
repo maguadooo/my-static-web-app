@@ -1,4 +1,4 @@
-configuration TestConfig
+configuration DSCconfig
 {
     Node IsWebServer
     {
