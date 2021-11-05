@@ -1,0 +1,232 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "allowConfigFileUpdates": {
+            "type": "bool",
+            "defaultValue": false,
+            "metadata": {
+                "description": "Optional. false if config file is locked for this static web app; otherwise, true"
+            }
+        },
+        "appInsightsResourceId": {
+            "type": "string",
+            "defaultValue": "",
+            "metadata": {
+                "description": "Optional. The Resource Id of the Application Insights to monitor the Function App."
+            }
+        },
+        "appSettings": {
+            "type": "object",
+            "defaultValue": {},
+            "metadata": {
+                "description": "Optional. App settings to be created in the static web app."
+            }
+        },
+        "functionAppSettings": {
+            "type": "object",
+            "defaultValue": {},
+            "metadata": {
+                "description": "Optional. Function App settings to be created in the static web app."
+            }
+        },
+        "identity": {
+            "type": "object",
+            "defaultValue": { "type": "None" },
+            "metadata": {
+                "description": "Optional. Managed identity for Static Webapp."
+            }
+        },
+        "location": {
+            "type": "string",
+            "defaultValue": "[resourceGroup().location]",
+            "metadata": {
+                "description": "Optional. Location for all resources."
+            }
+        },
+        "lockForDeletion": {
+            "type": "bool",
+            "defaultValue": true,
+            "metadata": {
+                "description": "Optional. Switch to lock Static Webapp from deletion."
+            }
+        },
+        "privateEndpoints": {
+            "type": "array",
+            "metadata": {
+                "description": "Required. Configuration Details for private endpoints."
+            }
+        },
+        "resourceGroupName": {
+            "type": "string",
+            "defaultValue": "[resourceGroup().name]",
+            "metadata": {
+                "description": "Optional. Name of the resource group to which the solution will be deployed to."
+            }
+        },
+        "roleAssignments": {
+            "type": "array",
+            "defaultValue": [],
+            "metadata": {
+                "description": "Optional. Array of role assignment objects that contain the 'roleDefinitionIdOrName' and 'principalId' to define RBAC role assignments on this resource. In the roleDefinitionIdOrName attribute, you can provide either the display name of the role definition, or it's fully qualified ID in the following format: '/providers/Microsoft.Authorization/roleDefinitions/c2f4ef07-c644-48eb-af81-4b1b4947fb11'."
+            }
+        },
+        "stagingEnvironmentPolicy": {
+            "type": "string",
+            "defaultValue": "Disabled",
+            "metadata": {
+                "description": "Optional. State indicating whether staging environments are allowed or not allowed for a static web app."
+            }
+        },
+        "staticWebAppName": {
+            "type": "string",
+            "metadata": {
+                "description": "Required. Name of the Static Web App."
+            }
+        },
+        "tags": {
+            "type": "object",
+            "defaultValue": {},
+            "metadata": {
+                "description": "Optional. Tags of the resource."
+            }
+        }
+    },
+    "functions": [],
+    "variables": {
+        // deployment names
+        "staticWebAppDeployName": "[concat(parameters('staticWebAppName'),'-deploy')]",
+
+        // Blocked parameters
+        "sku": {
+            "name": "Standard",
+            "tier": "Standard"
+        },
+
+
+        // private endpoints
+        "setPrivateDnsZonePd": "/subscriptions/df866080-32af-4097-a04c-2bc379e82cf5/resourceGroups/rm-sh-main-pd-01-euw-rg-network/providers/Microsoft.Network/privateDnsZones/privatelink.azurewebsites.net",
+        "ensurePrivateEndpoints": "[parameters('privateEndpoints')[0].subnetResourceId]",
+        "setPrivateEndpoints": {
+            "copy": [
+                {
+                    "name": "setPrivateEndpoints",
+                    "count": "[length(parameters('privateEndpoints'))]",
+                    "input": {
+                        "subnetResourceId": "[parameters('privateEndpoints')[copyIndex('setPrivateEndpoints')].subnetResourceId]",
+                        "service": "[if(
+                            and(
+                                contains(parameters('privateEndpoints')[copyIndex('setPrivateEndpoints')], 'service'),
+                                not(empty(parameters('privateEndpoints')[copyIndex('setPrivateEndpoints')].service))
+                            ),
+                            parameters('privateEndpoints')[copyIndex('setPrivateEndpoints')].service,
+                            'staticSites'
+                        )]",
+                        "privateDnsZoneResourceIds": "[if(
+                            and(
+                                contains(parameters('privateEndpoints')[copyIndex('setPrivateEndpoints')], 'privateDnsZoneResourceIds'),
+                                not(empty(parameters('privateEndpoints')[copyIndex('setPrivateEndpoints')].privateDnsZoneResourceIds))
+                            ),
+                            parameters('privateEndpoints')[copyIndex('setPrivateEndpoints')].privateDnsZoneResourceIds,
+                            createArray(variables('setPrivateDnsZonePd'))
+                        )]"
+                    }
+                }
+            ]
+        },
+        "privateEndpoints": "[array(variables('setPrivateEndpoints').setPrivateEndpoints)]"
+    },
+    "resources": [
+        {
+            "name": "[variables('staticWebAppDeployName')]",
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2021-04-01",
+            "resourceGroup": "[parameters('resourceGroupName')]",
+            "properties": {
+                "mode": "Incremental",
+                "templateLink": {
+                    "id": "/subscriptions/df866080-32af-4097-a04c-2bc379e82cf5/resourceGroups/rm-sh-main-pd-01-euw-rg-iac-modules/providers/Microsoft.Resources/templateSpecs/StaticWebApps/versions/1.0.5"
+                },
+                "parameters": {
+                    "allowConfigFileUpdates": {
+                        "value": "[parameters('allowConfigFileUpdates')]"
+                    },
+                    "appInsightsResourceId": {
+                        "value": "[parameters('appInsightsResourceId')]"
+                    },
+                    "appSettings": {
+                        "value": "[parameters('appSettings')]"
+                    },
+                    "functionAppSettings": {
+                        "value": "[parameters('functionAppSettings')]"
+                    },
+                    "identity": {
+                        "value": "[parameters('identity')]"
+                    },
+                    "location": {
+                        "value": "[parameters('location')]"
+                    },
+                    "lockForDeletion": {
+                        "value": "[parameters('lockForDeletion')]"
+                    },
+                    "privateEndpoints": {
+                        "value": "[variables('privateEndpoints')]"
+                    },
+                    "roleAssignments": {
+                        "value": "[parameters('roleAssignments')]"
+                    },
+                    "sku": {
+                        "value": "[variables('sku')]"
+                    },
+                    "stagingEnvironmentPolicy": {
+                        "value": "[parameters('stagingEnvironmentPolicy')]"
+                    },
+                    "staticWebAppName": {
+                        "value": "[parameters('staticWebAppName')]"
+                    },
+                    "tags": {
+                        "value": "[parameters('tags')]"
+                    }
+                }
+            }
+        }
+    ],
+    "outputs": {
+        "staticWebAppName": {
+            "type": "string",
+            "value": "[parameters('staticWebAppName')]",
+            "metadata": {
+                "description": "The name of the Static Web App."
+            }
+        },
+        "staticWebAppResourceGroupName": {
+            "type": "string",
+            "value": "[resourceGroup().name]",
+            "metadata": {
+                "description": "The Resource Group in which the static web app is created."
+            }
+        },
+        "staticWebAppResourceId": {
+            "type": "string",
+            "value": "[reference(variables('staticWebAppDeployName')).outputs.staticWebAppResourceId.value]",
+            "metadata": {
+                "description": "The resource ID of the static web app."
+            }
+        },
+        "principalId": {
+            "type": "string",
+            "condition": "[contains(toLower(parameters('identity').type),'systemassigned')]",
+            "value": "[reference(variables('staticWebAppDeployName')).outputs.principalId.value]",
+            "metadata": {
+                "description": "The principal Id of the Static Web App."
+            }
+        },
+        "staticWebAppAutoGeneratedDomain": {
+            "type": "string",
+            "value": "[reference(variables('staticWebAppDeployName')).outputs.staticWebAppAutoGeneratedDomain.value]",
+            "metadata": {
+                "description": "The auto generated domain where the app is accessible."
+            }
+        }
+    }
+}
